@@ -1,12 +1,12 @@
 {
-    "name": "juanchorossi/oca-php-api",
+    "name": "Nanod10/oca-php-api",
     "description": "PHP class for OCA Express Pak",
     "keywords": ["oca", "oca express pak"],
     "license": "GPL-3.0+",
     "authors": [
         {
-            "name": "Juancho Rossi",
-            "email": "juanchorossi@gmail.com"
+            "name": "Jauregui Leonardo J.",
+            "email": "Nanod10@hotmail.com"
         }
     ],
     "require": {},
