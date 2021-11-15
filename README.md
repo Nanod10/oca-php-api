@@ -11,7 +11,7 @@ Como dependencia en tu proyecto a través de composer.json
 ```json
 {
     "require": {
-        "juanchorossi/oca-php-api": "dev-master"
+        "nanod10/oca-php-api": "dev-master"
     }
 }
 ```
