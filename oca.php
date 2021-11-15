@@ -117,7 +117,7 @@ class Oca
 	 */
 	public function setUserAgent()
 	{
-		return 'OCA-PHP-API ' . self::VERSION . ' - github.com/juanchorossi/OCA-PHP-API';
+		return 'OCA-PHP-API ' . self::VERSION . '';
 	}
 
 	// =========================================================================
@@ -279,34 +279,107 @@ class Oca
 		$curl_opt_arr = $this->getCurlOptsArr();
 		$curl_opt_arr[CURLOPT_POST] 		= true;
 		$curl_opt_arr[CURLOPT_POSTFIELDS] 	= http_build_query($_query_string);
-		$curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/oep_tracking/Oep_Track.asmx/GetCentrosImposicionPorCP";
+
+		if(Config::get("app.debug")){
+			// $curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/oep_tracking/Oep_Track.asmx/GetCentrosImposicionConServiciosPorCP";
+			// $curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/oep_tracking/Oep_Track.asmx/GetCentrosImposicionPorCP";
+			$curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/epak_tracking/Oep_TrackEPak.asmx/GetCentrosImposicionConServiciosByCP";
+		}else{
+			$curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/epak_tracking/Oep_TrackEPak.asmx/GetCentrosImposicionConServiciosByCP";
+			// $curl_opt_arr[CURLOPT_URL] 			= "{$this->webservice_url}/oep_tracking/Oep_Track.asmx/GetCentrosImposicionPorCP";
+		}
 
 		curl_setopt_array($ch, $curl_opt_arr);
 
 		$dom = new DOMDocument();
-		@$dom->loadXML(curl_exec($ch));
+		$curl_resp = curl_exec($ch);
+		@$dom->loadXML($curl_resp);
 		$xpath = new DOMXpath($dom);
+ 		
+ 		
+ 		$usarNuevoEndpoint = true;
+		if($usarNuevoEndpoint){
+			if(Config::get("app.debug")){
+				// die($curl_resp);
+			}
+
+			$c_imp = array();
+			foreach (@$xpath->query("//CentrosDeImposicion/Centro") as $key => $ci){
+				
+				if(trim($ci->getElementsByTagName('TipoAgencia')->item(0)->nodeValue)=="Sucursal OCA"){
+
+					$c_imp[] = array(	'IdCentroImposicion'	=> $ci->getElementsByTagName('IdCentroImposicion')->length>0 	? $ci->getElementsByTagName('IdCentroImposicion')->item(0)->nodeValue 	: '',
+										'Sigla'					=> $ci->getElementsByTagName('Sigla')->length>0 				? trim($ci->getElementsByTagName('Sigla')->item(0)->nodeValue)			: '',
+										'Sucursal'				=> $ci->getElementsByTagName('Sucursal')->length>0 				? trim($ci->getElementsByTagName('Sucursal')->item(0)->nodeValue) 		: '',
+										'Calle'					=> $ci->getElementsByTagName('Calle')->length>0 				? trim($ci->getElementsByTagName('Calle')->item(0)->nodeValue)			: '',
+										'Numero'				=> $ci->getElementsByTagName('Numero')->length>0 				? trim($ci->getElementsByTagName('Numero')->item(0)->nodeValue)			: '',
+										'Torre'					=> $ci->getElementsByTagName('Torre')->length>0 				? trim($ci->getElementsByTagName('Torre')->item(0)->nodeValue)			: '',
+										'Piso'					=> $ci->getElementsByTagName('Piso')->length>0 					? trim($ci->getElementsByTagName('Piso')->item(0)->nodeValue)			: '',
+										'Depto'					=> $ci->getElementsByTagName('Depto')->length>0 				? trim($ci->getElementsByTagName('Depto')->item(0)->nodeValue)			: '',
+										'Localidad'				=> $ci->getElementsByTagName('Localidad')->length>0 			? trim($ci->getElementsByTagName('Localidad')->item(0)->nodeValue)		: '',
+										'CodigoPostal'			=> $ci->getElementsByTagName('CodigoPostal')->length>0 			? trim($ci->getElementsByTagName('CodigoPostal')->item(0)->nodeValue)	: '',
+										'Provincia'				=> $ci->getElementsByTagName('Provincia')->length>0 			? trim($ci->getElementsByTagName('Provincia')->item(0)->nodeValue)		: '',
+										'Telefono'				=> $ci->getElementsByTagName('Telefono')->length>0 				? trim($ci->getElementsByTagName('Telefono')->item(0)->nodeValue)		: '',
+
+										'Latitud'				=> $ci->getElementsByTagName('Latitud')->length>0 				? trim($ci->getElementsByTagName('Latitud')->item(0)->nodeValue)		: '',
+										'Longitud'				=> $ci->getElementsByTagName('Longitud')->length>0 				? trim($ci->getElementsByTagName('Longitud')->item(0)->nodeValue)		: '',
+										'TipoAgencia'			=> $ci->getElementsByTagName('TipoAgencia')->length>0 			? trim($ci->getElementsByTagName('TipoAgencia')->item(0)->nodeValue)	: '',
+										'esSucursal'			=> $ci->getElementsByTagName('TipoAgencia')->length>0 			? 
+																		(
+																			trim($ci->getElementsByTagName('TipoAgencia')->item(0)->nodeValue)=="Sucursal OCA" ? true : false
+																		) : '',
+										'esAgenteOficial'		=> $ci->getElementsByTagName('TipoAgencia')->length>0 			? 
+																		(
+																			trim($ci->getElementsByTagName('TipoAgencia')->item(0)->nodeValue)=="Agente Oficial" ? true : false
+																		) : '',
+										'HorarioAtencion'		=> $ci->getElementsByTagName('HorarioAtencion')->length>0 		? trim($ci->getElementsByTagName('HorarioAtencion')->item(0)->nodeValue): '',
+										'SucursalOCA'			=> $ci->getElementsByTagName('SucursalOCA')->length>0 			? trim($ci->getElementsByTagName('SucursalOCA')->item(0)->nodeValue)	: '',
+										
+										'Servicios'				=> []
+									);
+					if(Config::get("app.debug")){
+						// dd($c_imp);
+					}
+					if( $ci->getElementsByTagName('Servicios')->length>0 ){
+						$keys = array_keys($c_imp);
+						$last_key = end($keys);
+						$c_imp[$last_key]["Servicios"] = [];
+						$servicios = $ci->getElementsByTagName('Servicios')->item(0);
+						foreach ($servicios->getElementsByTagName("Servicio") as $key_servi => $servi) {
+							$c_imp[$last_key]["Servicios"][] = [
+								"IdTipoServicio" => $servi->getElementsByTagName("IdTipoServicio")->length>0 ? trim($servi->getElementsByTagName("IdTipoServicio")->item(0)->nodeValue) : '',
+								"ServicioDesc" =>  $servi->getElementsByTagName("ServicioDesc")->length>0 ? trim($servi->getElementsByTagName("ServicioDesc")->item(0)->nodeValue) : '',
+							];
+						}
+					}
+				}else{
+					$servicios = null;
+				}
+			}
+		}else{
+
 	
-		$c_imp = array();
-		foreach (@$xpath->query("//NewDataSet/Table") as $ci)
-		{
-			$c_imp[] = array(	'idCentroImposicion'	=> $ci->getElementsByTagName('idCentroImposicion')->item(0)->nodeValue,
-								'IdSucursalOCA'			=> $ci->getElementsByTagName('IdSucursalOCA')->item(0)->nodeValue,
-								'Sigla'					=> $ci->getElementsByTagName('Sigla')->item(0)->nodeValue,
-								'Descripcion'			=> $ci->getElementsByTagName('Descripcion')->item(0)->nodeValue,
-								'Calle'					=> $ci->getElementsByTagName('Calle')->item(0)->nodeValue,
-								'Numero'				=> $ci->getElementsByTagName('Numero')->item(0)->nodeValue,
-								'Torre'					=> $ci->getElementsByTagName('Torre')->item(0)->nodeValue,
-								'Piso'					=> $ci->getElementsByTagName('Piso')->item(0)->nodeValue,
-								'Depto'					=> $ci->getElementsByTagName('Depto')->item(0)->nodeValue,
-								'Localidad'				=> $ci->getElementsByTagName('Localidad')->item(0)->nodeValue,
-								'IdProvincia'			=> $ci->getElementsByTagName('IdProvincia')->item(0)->nodeValue,
-								'idCodigoPostal'		=> $ci->getElementsByTagName('idCodigoPostal')->item(0)->nodeValue,
-								'Telefono'				=> $ci->getElementsByTagName('Telefono')->item(0)->nodeValue,
-								'eMail'					=> $ci->getElementsByTagName('eMail')->item(0)->nodeValue,
-								'Provincia'				=> $ci->getElementsByTagName('Provincia')->item(0)->nodeValue,
-								'CodigoPostal'			=> $ci->getElementsByTagName('CodigoPostal')->item(0)->nodeValue
-							);
+			$c_imp = array();
+			foreach (@$xpath->query("//NewDataSet/Table") as $ci)
+			{
+				$c_imp[] = array(	'idCentroImposicion'	=> $ci->getElementsByTagName('idCentroImposicion')->length>0 	? $ci->getElementsByTagName('idCentroImposicion')->item(0)->nodeValue 	: '',
+									'IdSucursalOCA'			=> $ci->getElementsByTagName('IdSucursalOCA')->length>0 		? $ci->getElementsByTagName('IdSucursalOCA')->item(0)->nodeValue 		: '',
+									'Sigla'					=> $ci->getElementsByTagName('Sigla')->length>0 				? $ci->getElementsByTagName('Sigla')->item(0)->nodeValue 				: '',
+									'Descripcion'			=> $ci->getElementsByTagName('Descripcion')->length>0 			? $ci->getElementsByTagName('Descripcion')->item(0)->nodeValue 			: '',
+									'Calle'					=> $ci->getElementsByTagName('Calle')->length>0 				? $ci->getElementsByTagName('Calle')->item(0)->nodeValue 				: '',
+									'Numero'				=> $ci->getElementsByTagName('Numero')->length>0 				? $ci->getElementsByTagName('Numero')->item(0)->nodeValue 				: '',
+									'Torre'					=> $ci->getElementsByTagName('Torre')->length>0 				? $ci->getElementsByTagName('Torre')->item(0)->nodeValue 				: '',
+									'Piso'					=> $ci->getElementsByTagName('Piso')->length>0 					? $ci->getElementsByTagName('Piso')->item(0)->nodeValue 				: '',
+									'Depto'					=> $ci->getElementsByTagName('Depto')->length>0 				? $ci->getElementsByTagName('Depto')->item(0)->nodeValue 				: '',
+									'Localidad'				=> $ci->getElementsByTagName('Localidad')->length>0 			? $ci->getElementsByTagName('Localidad')->item(0)->nodeValue 			: '',
+									'IdProvincia'			=> $ci->getElementsByTagName('IdProvincia')->length>0 			? $ci->getElementsByTagName('IdProvincia')->item(0)->nodeValue 			: '',
+									'idCodigoPostal'		=> $ci->getElementsByTagName('idCodigoPostal')->length>0 		? $ci->getElementsByTagName('idCodigoPostal')->item(0)->nodeValue 		: '',
+									'Telefono'				=> $ci->getElementsByTagName('Telefono')->length>0 				? $ci->getElementsByTagName('Telefono')->item(0)->nodeValue 			: '',
+									'eMail'					=> $ci->getElementsByTagName('eMail')->length>0 				? $ci->getElementsByTagName('eMail')->item(0)->nodeValue 				: '',
+									'Provincia'				=> $ci->getElementsByTagName('Provincia')->length>0 			? $ci->getElementsByTagName('Provincia')->item(0)->nodeValue 			: '',
+									'CodigoPostal'			=> $ci->getElementsByTagName('CodigoPostal')->length>0 			? $ci->getElementsByTagName('CodigoPostal')->item(0)->nodeValue 		: ''
+								);
+			}
 		}
 		
 		return $c_imp;
@@ -518,7 +591,8 @@ class Oca
 		curl_setopt_array($ch, $curl_opt_arr);
 
 		$xml = curl_exec($ch);
-		file_put_contents('ingresoORMultiplesRetiros.xml', $xml);
+		file_put_contents('./../don_logs/OCAWS/ingreso/ingresoORMultiplesRetirosxml-'.date('Y-m-d_H-i-s').'.xml', $xml);
+
 
 		$dom = new DOMDocument();
 		@$dom->loadXml($xml);
@@ -527,31 +601,36 @@ class Oca
 		$xml_detalle_ingresos = @$xpath->query("//Resultado/DetalleIngresos ");
 		$xml_resumen = @$xpath->query("//Resultado/Resumen ")->item(0);
 
-		$detalle_ingresos = array();
+		if(!is_null($xml_resumen)){
 
-		foreach($xml_detalle_ingresos as $item)
-		{
-			$detalle_ingresos[] = array(
-				'Operativa' => $item->getElementsByTagName('Operativa')->item(0)->nodeValue,
-				'OrdenRetiro' => $item->getElementsByTagName('OrdenRetiro')->item(0)->nodeValue,
-				'NumeroEnvio' => $item->getElementsByTagName('NumeroEnvio')->item(0)->nodeValue,
-				'Remito' => $item->getElementsByTagName('Remito')->item(0)->nodeValue,
-				'Estado' => $item->getElementsByTagName('Estado')->item(0)->nodeValue,
-				'sucursalDestino' => $item->getElementsByTagName('sucursalDestino')->item(0)->nodeValue
-				 );
+			$detalle_ingresos = array();
+
+			foreach($xml_detalle_ingresos as $item)
+			{
+				$detalle_ingresos[] = array(
+					'Operativa' => $item->getElementsByTagName('Operativa')->item(0)->nodeValue,
+					'OrdenRetiro' => $item->getElementsByTagName('OrdenRetiro')->item(0)->nodeValue,
+					'NumeroEnvio' => $item->getElementsByTagName('NumeroEnvio')->item(0)->nodeValue,
+					'Remito' => $item->getElementsByTagName('Remito')->item(0)->nodeValue,
+					'Estado' => $item->getElementsByTagName('Estado')->item(0)->nodeValue,
+					'sucursalDestino' => $item->getElementsByTagName('sucursalDestino')->item(0)->nodeValue
+					 );
+			}
+
+			$resumen = array(
+					'CodigoOperacion' => $xml_resumen->getElementsByTagName('CodigoOperacion')->item(0)->nodeValue,
+					'FechaIngreso' => $xml_resumen->getElementsByTagName('FechaIngreso')->item(0)->nodeValue,
+					'MailUsuario' => $xml_resumen->getElementsByTagName('mailUsuario')->item(0)->nodeValue,
+					'CantidadRegistros' => $xml_resumen->getElementsByTagName('CantidadRegistros')->item(0)->nodeValue,
+					'CantidadIngresados' => $xml_resumen->getElementsByTagName('CantidadIngresados')->item(0)->nodeValue,
+					'CantidadRechazados' => $xml_resumen->getElementsByTagName('CantidadRechazados')->item(0)->nodeValue
+					 );
+
+			$resultado = array('detalleIngresos' => $detalle_ingresos, 'resumen' => $resumen);
+
+		}else{
+			$resultado = ["error"=>$xml];
 		}
-
-
-		$resumen = array(
-				'CodigoOperacion' => $xml_resumen->getElementsByTagName('CodigoOperacion')->item(0)->nodeValue,
-				'FechaIngreso' => $xml_resumen->getElementsByTagName('FechaIngreso')->item(0)->nodeValue,
-				'MailUsuario' => $xml_resumen->getElementsByTagName('mailUsuario')->item(0)->nodeValue,
-				'CantidadRegistros' => $xml_resumen->getElementsByTagName('CantidadRegistros')->item(0)->nodeValue,
-				'CantidadIngresados' => $xml_resumen->getElementsByTagName('CantidadIngresados')->item(0)->nodeValue,
-				'CantidadRechazados' => $xml_resumen->getElementsByTagName('CantidadRechazados')->item(0)->nodeValue
-				 );
-
-		$resultado = array('detalleIngresos' => $detalle_ingresos, 'resumen' => $resumen);
 
 		return $resultado;
 	}
@@ -585,7 +664,11 @@ class Oca
 		curl_setopt_array($ch, $curl_opt_arr);
 
 		$dom = new DOMDocument();
-		@$dom->loadXml(curl_exec($ch));
+		$curl_exec_rta = curl_exec($ch);
+		// if(Config::get("app.debug")){
+		// 	dd($curl_exec_rta);
+		// }
+		@$dom->loadXml($curl_exec_rta);
 		$xpath = new DOMXPath($dom);
 
 		$centros = array();
@@ -638,7 +721,7 @@ class Oca
 		curl_setopt_array($ch, $curl_opt_arr);
 
 		$xml = curl_exec($ch);
-		file_put_contents('anularOrdenGenerada.xml', $xml);
+		file_put_contents('./../don_logs/OCAWS/anulado/anularOrdenGenerada-'.date('Y-m-d_H-i-s').'.xml', $xml);
 
 		$dom = new DOMDocument();
 		@$dom->loadXml($xml);
